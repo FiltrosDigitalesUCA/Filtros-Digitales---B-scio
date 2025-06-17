@@ -1,0 +1,70 @@
+# Paso 1: Importar bibliotecas necesarias
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.signal import firwin, lfilter, freqz
+from IPython.display import Audio
+
+# Paso 2: Generar señal ECG simulada con ruido
+fs = 500  # Frecuencia de muestreo [Hz]
+duration = 5  # Duración de la señal [s]
+t = np.linspace(0, duration, fs * duration, endpoint=False)
+
+# Señal ECG limpia
+ecg_clean = np.sin(2 * np.pi * 1.5 * t) + 0.5 * np.sin(2 * np.pi * 2.5 * t)
+
+# Ruido de alta frecuencia
+noise = 0.3 * np.sin(2 * np.pi * 80 * t) + 0.2 * np.random.randn(len(t))
+
+# Señal contaminada
+ecg_noisy = ecg_clean + noise
+
+# Paso 3: Diseñar el filtro FIR ajustado
+fc = 70  # Frecuencia de corte [Hz]
+num_taps = 201  # Número de coeficientes del filtro
+normalized_fc = fc / (fs / 2)  # Normalización respecto a Nyquist
+
+# Filtro con ventana de Blackman
+fir_coeff = firwin(num_taps, normalized_fc, window='blackman')
+
+# Paso 4: Aplicar el filtro a la señal contaminada
+ecg_filtered = lfilter(fir_coeff, 1.0, ecg_noisy)
+
+# Paso 5: Corregir el retardo del filtro FIR
+delay = (num_taps - 1) // 2
+ecg_filtered_aligned = np.roll(ecg_filtered, -delay)
+
+# Paso 6: Visualizar las señales
+plt.figure(figsize=(12, 4))
+plt.plot(t, ecg_noisy, label='ECG contaminada', alpha=0.6)
+plt.plot(t, ecg_filtered_aligned, label='ECG filtrada (ajustada)', linewidth=2)
+plt.plot(t, ecg_clean, label='ECG original', linestyle='--', alpha=0.7)
+plt.xlabel("Tiempo [s]")
+plt.title("Comparación de señales ECG")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+# Paso 7: Visualizar la respuesta en frecuencia del filtro
+w, h = freqz(fir_coeff, worN=8000)
+plt.figure(figsize=(10, 3))
+plt.plot(w * fs / (2 * np.pi), 20 * np.log10(abs(h)))
+plt.title('Respuesta en frecuencia del filtro FIR (Blackman)')
+plt.xlabel('Frecuencia [Hz]')
+plt.ylabel('Magnitud [dB]')
+plt.grid()
+plt.tight_layout()
+plt.show()
+
+# Paso 8: Calcular relación señal-ruido (SNR)
+def snr(signal, noise):
+    return 10 * np.log10(np.sum(signal**2) / np.sum(noise**2))
+
+original_noise = ecg_noisy - ecg_clean
+filtered_noise = ecg_filtered_aligned - ecg_clean
+
+snr_before = snr(ecg_clean, original_noise)
+snr_after = snr(ecg_clean, filtered_noise)
+
+print("SNR antes del filtrado:", round(snr_before, 2), "dB")
+print("SNR después del filtrado:", round(snr_after, 2), "dB")
